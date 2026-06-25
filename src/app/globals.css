@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f1f5f9; /* Slate 100 */
+  --foreground: #0f172a; /* Slate 900 */
+  --card: #ffffff; /* White card panels */
+  --card-foreground: #0f172a;
+  --border: #e2e8f0; /* Slate 200 */
+  --accent-blue: #0f3d4a; /* Primary mockup dark teal/navy */
+  --accent-light: #2dd4bf; /* Secondary teal */
+}
+
+body {
+  color: var(--foreground);
+  background-color: var(--background);
+  min-height: 100vh;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbar for light theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Glassmorphism panel override for light theme */
+.glass-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 18px 0 rgba(15, 23, 42, 0.05);
+}
+
+/* Pulsing warning and critical animations for light theme border warning */
+@keyframes warningPulseLight {
+  0%, 100% { border-color: rgba(234, 179, 8, 0.4); box-shadow: 0 0 8px rgba(234, 179, 8, 0.15); }
+  50% { border-color: rgba(234, 179, 8, 0.9); box-shadow: 0 0 14px rgba(234, 179, 8, 0.35); }
+}
+
+@keyframes criticalPulseLight {
+  0%, 100% { border-color: rgba(239, 68, 68, 0.4); box-shadow: 0 0 8px rgba(239, 68, 68, 0.15); }
+  50% { border-color: rgba(239, 68, 68, 0.9); box-shadow: 0 0 16px rgba(239, 68, 68, 0.45); }
+}
+
+.warning-status {
+  animation: warningPulseLight 2s infinite ease-in-out;
+}
+
+.critical-status {
+  animation: criticalPulseLight 1.5s infinite ease-in-out;
+}
+
+/* Toggle Switch Styling */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #cbd5e1;
+  transition: .3s;
+  border-radius: 24px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #0f3d4a;
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
