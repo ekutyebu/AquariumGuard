@@ -10,6 +10,8 @@ import {
   Zap,
   Thermometer,
   Activity,
+  Droplet,
+  Droplets,
 } from "lucide-react";
 
 interface Alert {
@@ -61,9 +63,24 @@ export default function AlertsLog() {
     }
   };
 
+  const handleResolve = async (id: string) => {
+    try {
+      const res = await fetch("/api/alerts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: "RESOLVED" }),
+      });
+      if (res.ok) {
+        fetchAlerts();
+      }
+    } catch (e) {
+      console.error("Error resolving alert:", e);
+    }
+  };
+
   // Find if there is an active critical alert for Pond 1 malfunction
   const urgentAlert = alerts.find(
-    (a) => a.status === "ACTIVE" && a.parameter === "DISSOLVED_OXYGEN" && a.severity === "CRITICAL"
+    (a) => a.status === "ACTIVE" && a.parameter === "TURBIDITY" && a.severity === "CRITICAL"
   );
 
   if (isLoading && alerts.length === 0) {
@@ -163,7 +180,7 @@ export default function AlertsLog() {
                 </div>
               ) : (
                 alerts.map((alert) => {
-                  let alertIcon = <Wind className="h-5 w-5" />;
+                  let alertIcon = <Droplets className="h-5 w-5" />;
                   let iconBg = "bg-red-50 text-red-500";
                   
                   if (alert.parameter === "TEMPERATURE") {

@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import {
   Cloud,
-  Wind,
   Droplet,
   Thermometer,
   Bell,
@@ -18,7 +17,7 @@ interface Telemetry {
   timestamp: string;
   temperature: number;
   ph: number;
-  dissolvedOxygen: number;
+  turbidity: number;
   isSimulated: boolean;
 }
 
@@ -27,7 +26,7 @@ interface Settings {
   tempMax: number;
   phMin: number;
   phMax: number;
-  doMin: number;
+  turbidityMax: number;
   aeratorState: boolean;
   boreholePumpState: boolean;
   predictiveEnabled: boolean;
@@ -100,12 +99,12 @@ export default function Dashboard() {
     }
   };
 
-  const getDoStatus = (val: number | null) => {
+  const getTurbidityStatus = (val: number | null) => {
     if (val === null) return { text: "No Connection", color: "text-slate-400", border: "border-slate-200 bg-slate-50" };
-    const doMin = settings?.doMin ?? 5.0;
-    if (val < doMin) return { text: "Critical Depletion", color: "text-red-500", border: "border-red-200 bg-red-50" };
-    if (val < doMin + 1.0) return { text: "Warning Range", color: "text-yellow-600", border: "border-yellow-200 bg-yellow-50" };
-    return { text: "Optimal Range", color: "text-teal-600", border: "border-teal-200" };
+    const turbMax = settings?.turbidityMax ?? 100.0;
+    if (val > turbMax)            return { text: "Critical — Murky", color: "text-red-500",    border: "border-red-200 bg-red-50" };
+    if (val > turbMax * 0.75)     return { text: "Warning Range",    color: "text-yellow-600", border: "border-yellow-200 bg-yellow-50" };
+    return { text: "Clear Water", color: "text-teal-600", border: "border-teal-200" };
   };
 
   const getPhStatus = (val: number | null) => {
@@ -132,11 +131,11 @@ export default function Dashboard() {
     );
   }
 
-  const liveDo = telemetry ? telemetry.dissolvedOxygen : null;
+  const liveTurbidity = telemetry ? telemetry.turbidity : null;
   const livePh = telemetry ? telemetry.ph : null;
   const liveTemp = telemetry ? telemetry.temperature : null;
 
-  const doStatus = getDoStatus(liveDo);
+  const turbidityStatus = getTurbidityStatus(liveTurbidity);
 
   return (
     <div className="space-y-6">
@@ -167,25 +166,25 @@ export default function Dashboard() {
       {/* Desktop (md+): All three parameter cards side-by-side */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
         
-        {/* Dissolved Oxygen Card */}
-        <div className={`glass-panel p-5 rounded-3xl bg-white border ${doStatus.border} col-span-2 md:col-span-1 transition-all flex flex-col justify-between`}>
+        {/* Turbidity Card */}
+        <div className={`glass-panel p-5 rounded-3xl bg-white border ${turbidityStatus.border} col-span-2 md:col-span-1 transition-all flex flex-col justify-between`}>
           <div>
             <div className="flex justify-between items-start">
               <div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">
-                  Dissolved Oxygen
+                  Turbidity
                 </span>
-                <span className={`text-[10px] font-black uppercase tracking-wider ${doStatus.color}`}>
-                  • {doStatus.text}
+                <span className={`text-[10px] font-black uppercase tracking-wider ${turbidityStatus.color}`}>
+                  • {turbidityStatus.text}
                 </span>
               </div>
-              <Wind className="h-5 w-5 text-slate-400" />
+              <Droplets className="h-5 w-5 text-slate-400" />
             </div>
             <div className="flex items-baseline space-x-1.5 mt-5">
               <span className="text-4xl font-extrabold text-slate-800 tracking-tighter">
-                {liveDo !== null ? liveDo.toFixed(1) : "--"}
+                {liveTurbidity !== null ? liveTurbidity.toFixed(1) : "--"}
               </span>
-              <span className="text-sm font-bold text-slate-400">mg/L</span>
+              <span className="text-sm font-bold text-slate-400">NTU</span>
             </div>
           </div>
         </div>

@@ -20,11 +20,11 @@ export default function SidebarNav() {
       <div>
         {/* Brand Header */}
         <div className="p-6 border-b border-slate-200 flex items-center space-x-3">
-          <div className="bg-[#0f3d4a]/5 p-2 rounded-xl text-[#0f3d4a]">
+          {/* <div className="bg-[#0f3d4a]/5 p-2 rounded-xl text-[#0f3d4a]">
             <Fish className="h-6 w-6" />
-          </div>
+          </div> */}
           <div>
-            <h1 className="font-extrabold text-base text-slate-800 leading-tight">AquariumGuard</h1>
+            <h1 className="font-extrabold text-base text-slate-800 leading-tight">WaterQualityMonitor</h1>
             <span className="text-[9px] text-slate-400 font-black tracking-widest block uppercase">POND SYSTEM</span>
           </div>
         </div>
@@ -39,11 +39,10 @@ export default function SidebarNav() {
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center space-x-3 px-4 py-3 rounded-2xl transition-all ${
-                  isActive
-                    ? "bg-[#0f3d4a] text-white shadow-md shadow-slate-900/10"
-                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                }`}
+                className={`flex items-center space-x-3 px-4 py-3 rounded-2xl transition-all ${isActive
+                  ? "bg-[#0f3d4a] text-white shadow-md shadow-slate-900/10"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  }`}
               >
                 <Icon className="h-5 w-5" />
                 <span className="text-xs font-bold tracking-wider">{item.name}</span>

@@ -17,15 +17,15 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { temperature, ph, dissolvedOxygen, isSimulated } = body;
+    const { temperature, ph, turbidity, isSimulated } = body;
 
     if (
       typeof temperature !== "number" ||
       typeof ph !== "number" ||
-      typeof dissolvedOxygen !== "number"
+      typeof turbidity !== "number"
     ) {
       return NextResponse.json(
-        { error: "Invalid sensor data format. Expected numeric fields." },
+        { error: "Invalid sensor data format. Expected numeric fields: temperature, ph, turbidity." },
         { status: 400 }
       );
     }
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
           tempMax: 30.0,
           phMin: 6.5,
           phMax: 8.5,
-          doMin: 5.0,
+          turbidityMax: 100.0,
           aeratorState: true,
           boreholePumpState: false,
           predictiveEnabled: true,
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       data: {
         temperature,
         ph,
-        dissolvedOxygen,
+        turbidity,
         isSimulated: !!isSimulated,
       },
     });
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
         timestamp: h.timestamp,
         temperature: h.temperature,
         ph: h.ph,
-        dissolvedOxygen: h.dissolvedOxygen,
+        turbidity: h.turbidity,
       }))
       .reverse();
 
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
       tempMax: settings.tempMax,
       phMin: settings.phMin,
       phMax: settings.phMax,
-      doMin: settings.doMin,
+      turbidityMax: settings.turbidityMax,
     };
 
     const mlResults = analyzeTelemetry(history, newTelemetry, thresholds);
@@ -96,7 +96,6 @@ export async function POST(req: NextRequest) {
       paramLabel: string
     ) => {
       let isViolated = false;
-      let severity: "WARNING" | "CRITICAL" = "CRITICAL";
       let msg = "";
 
       if (value > maxVal) {
@@ -116,7 +115,7 @@ export async function POST(req: NextRequest) {
           const alert = await db.alert.create({
             data: {
               type: "THRESHOLD",
-              severity,
+              severity: "CRITICAL",
               parameter: paramName,
               value,
               message: msg,
@@ -132,15 +131,10 @@ export async function POST(req: NextRequest) {
       }
     };
 
-    const checkParamMin = async (
-      paramName: "DISSOLVED_OXYGEN",
-      value: number,
-      minVal: number,
-      paramLabel: string
-    ) => {
-      if (value < minVal) {
+    const checkTurbidityMax = async (value: number, maxVal: number) => {
+      if (value > maxVal) {
         const activeAlert = await db.alert.findFirst({
-          where: { parameter: paramName, type: "THRESHOLD", status: "ACTIVE" },
+          where: { parameter: "TURBIDITY", type: "THRESHOLD", status: "ACTIVE" },
         });
 
         if (!activeAlert) {
@@ -148,16 +142,16 @@ export async function POST(req: NextRequest) {
             data: {
               type: "THRESHOLD",
               severity: "CRITICAL",
-              parameter: paramName,
+              parameter: "TURBIDITY",
               value,
-              message: `Critical Drop Warning: Oxygen reached ${value.toFixed(1)} mg/L. Recommended action: Manual aeration bypass.`,
+              message: `Critical Turbidity Warning: Water clarity reached ${value.toFixed(1)} NTU, exceeding safe maximum of ${maxVal} NTU. Recommended action: water change or filtration check.`,
             },
           });
           generatedAlerts.push(alert);
         }
       } else {
         await db.alert.updateMany({
-          where: { parameter: paramName, type: "THRESHOLD", status: "ACTIVE" },
+          where: { parameter: "TURBIDITY", type: "THRESHOLD", status: "ACTIVE" },
           data: { status: "RESOLVED", resolvedAt: new Date() },
         });
       }
@@ -166,7 +160,7 @@ export async function POST(req: NextRequest) {
     // Run evaluations
     await checkParamMinMax("TEMPERATURE", temperature, settings.tempMin, settings.tempMax, "Temperature");
     await checkParamMinMax("PH", ph, settings.phMin, settings.phMax, "pH level");
-    await checkParamMin("DISSOLVED_OXYGEN", dissolvedOxygen, settings.doMin, "Dissolved Oxygen");
+    await checkTurbidityMax(turbidity, settings.turbidityMax);
 
     // --- 2. Anomaly Logs ---
     for (const anomaly of mlResults.anomalies) {
@@ -235,15 +229,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Clear resolved alerts
+    // Clear stale ML alerts that are no longer triggered
     const activeMLAlerts = await db.alert.findMany({
       where: { type: { in: ["PREDICTIVE", "ANOMALY"] }, status: "ACTIVE" },
     });
 
     for (const activeAlert of activeMLAlerts) {
-      const matchesAnomaly = mlResults.anomalies.some((a) => a.parameter === activeAlert.parameter);
+      const matchesAnomaly    = mlResults.anomalies.some((a) => a.parameter === activeAlert.parameter);
       const matchesPrediction = mlResults.predictions.some((p) => p.parameter === activeAlert.parameter);
-      const matchesRoc = mlResults.rateOfChangeAlerts.some((r) => r.parameter === activeAlert.parameter);
+      const matchesRoc        = mlResults.rateOfChangeAlerts.some((r) => r.parameter === activeAlert.parameter);
 
       if (!matchesAnomaly && (!settings.predictiveEnabled || !matchesPrediction) && !matchesRoc) {
         await db.alert.update({
@@ -258,7 +252,6 @@ export async function POST(req: NextRequest) {
       telemetry: newTelemetry,
       alertsTriggered: generatedAlerts,
       intervalMinutes: settings.intervalMinutes,
-      // Synchronize hardware relays directly with ESP32 JSON response
       aeratorState: settings.aeratorState,
       boreholePumpState: settings.boreholePumpState,
       timestamp: new Date().toISOString(),

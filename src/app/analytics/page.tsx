@@ -9,6 +9,7 @@ import {
   Info,
   Zap,
   Activity,
+  Eye,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -18,7 +19,7 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  ReferenceArea,
+  Legend,
 } from "recharts";
 
 interface Telemetry {
@@ -26,7 +27,7 @@ interface Telemetry {
   timestamp: string;
   temperature: number;
   ph: number;
-  dissolvedOxygen: number;
+  turbidity: number;
   isSimulated: boolean;
 }
 
@@ -35,9 +36,26 @@ interface Settings {
   tempMax: number;
   phMin: number;
   phMax: number;
-  doMin: number;
+  turbidityMax: number;
   aeratorState: boolean;
 }
+
+// Custom tooltip for the charts
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white border border-slate-200 rounded-2xl px-3 py-2 shadow-lg text-[10px] font-bold space-y-1">
+        <p className="text-slate-400 uppercase tracking-wider">{label}</p>
+        {payload.map((entry: any) => (
+          <p key={entry.name} style={{ color: entry.color }}>
+            {entry.name}: {entry.value?.toFixed(2)} {entry.unit}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
 
 export default function Analytics() {
   const [history, setHistory] = useState<Telemetry[]>([]);
@@ -67,6 +85,8 @@ export default function Analytics() {
 
   useEffect(() => {
     fetchData();
+    const interval = setInterval(fetchData, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const forceStartAerator = async () => {
@@ -101,155 +121,290 @@ export default function Analytics() {
 
   const latestReading = history.length > 0 ? history[history.length - 1] : null;
 
-  const displayData = history.map((h) => ({
-    time: new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    DO: h.dissolvedOxygen,
+  const chartData = history.map((h) => ({
+    time: new Date(h.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    Temp:      parseFloat(h.temperature.toFixed(2)),
+    pH:        parseFloat(h.ph.toFixed(2)),
+    Turbidity: parseFloat(h.turbidity.toFixed(1)),
   }));
+
+  const noDataPlaceholder = (label: string) => (
+    <div className="h-full flex flex-col items-center justify-center text-center p-5 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+      <Info className="h-6 w-6 text-slate-400 mb-2" />
+      <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">No {label} Data</h4>
+      <p className="text-[9px] text-slate-500 mt-1 max-w-xs font-semibold">
+        Connect your ESP32 to start logging sensor readings.
+      </p>
+    </div>
+  );
+
+  const tempStatus = latestReading
+    ? latestReading.temperature < (settings?.tempMin ?? 26) || latestReading.temperature > (settings?.tempMax ?? 30)
+      ? { text: "Out of Range", color: "text-red-500" }
+      : { text: "Optimal", color: "text-teal-600" }
+    : { text: "No Data", color: "text-slate-400" };
+
+  const phStatus = latestReading
+    ? latestReading.ph < (settings?.phMin ?? 6.5) || latestReading.ph > (settings?.phMax ?? 8.5)
+      ? { text: "Out of Range", color: "text-red-500" }
+      : { text: "Neutral", color: "text-teal-600" }
+    : { text: "No Data", color: "text-slate-400" };
+
+  const turbidityStatus = latestReading
+    ? latestReading.turbidity > (settings?.turbidityMax ?? 100)
+      ? { text: "Critical", color: "text-red-500" }
+      : latestReading.turbidity > (settings?.turbidityMax ?? 100) * 0.75
+      ? { text: "Warning", color: "text-yellow-600" }
+      : { text: "Clear", color: "text-teal-600" }
+    : { text: "No Data", color: "text-slate-400" };
 
   return (
     <div className="space-y-5">
-      
-      {/* 1. Page Header */}
+
+      {/* Page Header */}
       <div>
         <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
           Pond 04 Analytics
         </span>
         <h2 className="text-xl font-bold text-slate-800 tracking-tight leading-tight">
-          Dissolved Oxygen / Oxygène Dissous
+          Water Quality Parameters
         </h2>
       </div>
 
-      {/* Responsive Grid Wrapper */}
-      {/* Mobile: stacked; Desktop (lg+): Chart left, stats/warnings right */}
+      {/* Latest Reading Summary Cards */}
+      <div className="grid grid-cols-3 gap-4">
+        {/* Temperature */}
+        <div className="glass-panel p-4 rounded-3xl bg-white border border-slate-200 flex items-center space-x-3">
+          <div className="bg-orange-50 p-2 rounded-2xl shrink-0">
+            <Thermometer className="h-4 w-4 text-orange-500" />
+          </div>
+          <div>
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Temp</span>
+            <span className="text-sm font-extrabold text-slate-800">
+              {latestReading ? `${latestReading.temperature.toFixed(1)}°C` : "--"}
+            </span>
+            <span className={`text-[8px] font-black uppercase tracking-wider block mt-0.5 ${tempStatus.color}`}>
+              {tempStatus.text}
+            </span>
+          </div>
+        </div>
+
+        {/* pH */}
+        <div className="glass-panel p-4 rounded-3xl bg-white border border-slate-200 flex items-center space-x-3">
+          <div className="bg-blue-50 p-2 rounded-2xl shrink-0">
+            <Droplet className="h-4 w-4 text-blue-500" />
+          </div>
+          <div>
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">pH</span>
+            <span className="text-sm font-extrabold text-slate-800">
+              {latestReading ? latestReading.ph.toFixed(2) : "--"}
+            </span>
+            <span className={`text-[8px] font-black uppercase tracking-wider block mt-0.5 ${phStatus.color}`}>
+              {phStatus.text}
+            </span>
+          </div>
+        </div>
+
+        {/* Turbidity */}
+        <div className="glass-panel p-4 rounded-3xl bg-white border border-slate-200 flex items-center space-x-3">
+          <div className="bg-teal-50 p-2 rounded-2xl shrink-0">
+            <Eye className="h-4 w-4 text-teal-600" />
+          </div>
+          <div>
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Turbidity</span>
+            <span className="text-sm font-extrabold text-slate-800">
+              {latestReading ? `${latestReading.turbidity.toFixed(1)} NTU` : "--"}
+            </span>
+            <span className={`text-[8px] font-black uppercase tracking-wider block mt-0.5 ${turbidityStatus.color}`}>
+              {turbidityStatus.text}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Charts + Sidebar Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left Columns (lg:col-span-2) - Chart & System Note */}
+
+        {/* Left: 3 Stacked Charts */}
         <div className="lg:col-span-2 space-y-5">
-          {/* Recharts Chart Card */}
+
+          {/* Temperature Chart */}
           <div className="glass-panel p-5 rounded-3xl bg-white border border-slate-200 shadow-sm">
-            <div className="h-[230px] w-full mt-2">
-              {displayData.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-5 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                  <Info className="h-6 w-6 text-slate-400 mb-2" />
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">No Analytics Data</h4>
-                  <p className="text-[9px] text-slate-500 mt-1 max-w-xs font-semibold">
-                    Connect your ESP32 device to start logging and visualizing dissolved oxygen levels over time.
-                  </p>
-                </div>
-              ) : (
+            <div className="flex items-center space-x-2 mb-3">
+              <Thermometer className="h-4 w-4 text-orange-500" />
+              <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">Temperature (°C)</span>
+              <span className="ml-auto text-[9px] font-bold text-slate-400">
+                Safe: {settings?.tempMin ?? 26}–{settings?.tempMax ?? 30}°C
+              </span>
+            </div>
+            <div className="h-[160px] w-full">
+              {chartData.length === 0 ? noDataPlaceholder("Temperature") : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={displayData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                  <LineChart data={chartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                     <XAxis dataKey="time" stroke="#94a3b8" tickLine={false} style={{ fontSize: 9, fontWeight: 700 }} />
-                    <YAxis domain={[0.0, 8.0]} stroke="#94a3b8" tickLine={false} style={{ fontSize: 9, fontWeight: 700 }} />
-                    <Tooltip />
-                    
-                    <ReferenceArea
-                      y1={0.0}
-                      y2={4.0}
-                      fill="#fef2f2"
-                      stroke="#fee2e2"
-                      label={{
-                        value: "WARNING ZONE / ZONE D'ALERTE",
-                        fill: "#ef4444",
-                        fontSize: 8,
-                        fontWeight: 800,
-                        position: "insideTopLeft",
-                        offset: 10
-                      }}
-                    />
-                    
-                    <Line
-                      name="DO"
-                      type="monotone"
-                      dataKey="DO"
-                      stroke="#0f3d4a"
-                      strokeWidth={3}
-                      dot={{ r: 4, fill: "#ef4444", strokeWidth: 0 }}
-                      activeDot={{ r: 6 }}
-                    />
+                    <YAxis domain={["auto", "auto"]} stroke="#94a3b8" tickLine={false} style={{ fontSize: 9, fontWeight: 700 }} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Line name="Temp" unit="°C" type="monotone" dataKey="Temp" stroke="#f97316" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
                   </LineChart>
                 </ResponsiveContainer>
               )}
             </div>
+          </div>
 
-            <div className="mt-5 pt-3.5 border-t border-slate-100 flex justify-between items-center">
-              <div className="flex items-center space-x-1.5 text-slate-500">
-                <span className="h-2 w-2 rounded-full bg-[#0f3d4a]"></span>
-                <span className="text-[10px] font-black uppercase tracking-wider">Current Levels</span>
-              </div>
-              <span className="text-base font-extrabold text-slate-800">
-                {latestReading !== null ? `${latestReading.dissolvedOxygen.toFixed(1)} mg/L` : "--"}
+          {/* pH Chart */}
+          <div className="glass-panel p-5 rounded-3xl bg-white border border-slate-200 shadow-sm">
+            <div className="flex items-center space-x-2 mb-3">
+              <Droplet className="h-4 w-4 text-blue-500" />
+              <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">pH Level</span>
+              <span className="ml-auto text-[9px] font-bold text-slate-400">
+                Safe: {settings?.phMin ?? 6.5}–{settings?.phMax ?? 8.5}
               </span>
+            </div>
+            <div className="h-[160px] w-full">
+              {chartData.length === 0 ? noDataPlaceholder("pH") : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="time" stroke="#94a3b8" tickLine={false} style={{ fontSize: 9, fontWeight: 700 }} />
+                    <YAxis domain={[4, 10]} stroke="#94a3b8" tickLine={false} style={{ fontSize: 9, fontWeight: 700 }} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Line name="pH" unit="" type="monotone" dataKey="pH" stroke="#3b82f6" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
 
-          {/* System Note Container */}
+          {/* Turbidity Chart */}
+          <div className="glass-panel p-5 rounded-3xl bg-white border border-slate-200 shadow-sm">
+            <div className="flex items-center space-x-2 mb-3">
+              <Eye className="h-4 w-4 text-teal-600" />
+              <span className="text-[10px] font-black text-slate-800 uppercase tracking-wider">Turbidity (NTU)</span>
+              <span className="ml-auto text-[9px] font-bold text-slate-400">
+                Safe max: {settings?.turbidityMax ?? 100} NTU
+              </span>
+            </div>
+            <div className="h-[160px] w-full">
+              {chartData.length === 0 ? noDataPlaceholder("Turbidity") : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="time" stroke="#94a3b8" tickLine={false} style={{ fontSize: 9, fontWeight: 700 }} />
+                    <YAxis domain={[0, "auto"]} stroke="#94a3b8" tickLine={false} style={{ fontSize: 9, fontWeight: 700 }} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Line name="Turbidity" unit=" NTU" type="monotone" dataKey="Turbidity" stroke="#0f3d4a" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+          {/* System Note */}
           <div className="glass-panel p-5 rounded-3xl bg-white border border-slate-200 border-l-4 border-l-teal-600 flex items-start space-x-3">
             <div className="text-teal-600 shrink-0 mt-0.5">
               <Info className="h-5 w-5" />
             </div>
             <div>
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                System Note / Note de Système
-              </h4>
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider">System Note</h4>
               <p className="text-[10px] text-slate-600 font-semibold leading-relaxed mt-1">
-                Sensor S-049 calibrated 48h ago. Next reading in 12 mins. All pumps reporting normal voltage.
+                Charts update every 10 seconds. All three parameters (Temperature, pH, Turbidity) are sourced directly from the ESP32 sensor array via local HTTP telemetry.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Right Column (lg:col-span-1) - Stats cards, Override Alerts & Force Button */}
+        {/* Right: Stats + Alerts + Action */}
         <div className="lg:col-span-1 space-y-5">
-          {/* Parameter Grid (Side-by-side or stacked cleanly based on space) */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-1">
-            {/* Temp Card */}
-            <div className="glass-panel p-4.5 rounded-3xl bg-slate-100/50 border border-slate-200/80 flex items-center space-x-3.5">
-              <Thermometer className="h-5.5 w-5.5 text-slate-500 shrink-0" />
-              <div>
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Temp</span>
+
+          {/* Legend Card */}
+          <div className="glass-panel p-5 rounded-3xl bg-white border border-slate-200 space-y-3">
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2">
+              Parameter Legend
+            </h4>
+            {[
+              { color: "#f97316", label: "Temperature", unit: "°C" },
+              { color: "#3b82f6", label: "pH Level",    unit: "" },
+              { color: "#0f3d4a", label: "Turbidity",   unit: "NTU" },
+            ].map((p) => (
+              <div key={p.label} className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+                  <span className="text-[10px] font-bold text-slate-600">{p.label}</span>
+                </div>
+                <span className="text-[9px] font-black text-slate-400">{p.unit}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Trend Stats */}
+          <div className="glass-panel p-5 rounded-3xl bg-white border border-slate-200 space-y-3">
+            <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2">
+              Latest Readings
+            </h4>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-bold text-slate-500">Temperature</span>
                 <span className="text-sm font-extrabold text-slate-800">
-                  {latestReading !== null ? `${latestReading.temperature.toFixed(1)}°C` : "--"}
+                  {latestReading ? `${latestReading.temperature.toFixed(1)}°C` : "--"}
                 </span>
               </div>
-            </div>
-
-            {/* pH Card */}
-            <div className="glass-panel p-4.5 rounded-3xl bg-slate-100/50 border border-slate-200/80 flex items-center space-x-3.5">
-              <Droplet className="h-5.5 w-5.5 text-slate-500 shrink-0" />
-              <div>
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">pH Level</span>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-bold text-slate-500">pH</span>
                 <span className="text-sm font-extrabold text-slate-800">
-                  {latestReading !== null ? latestReading.ph.toFixed(1) : "--"}
+                  {latestReading ? latestReading.ph.toFixed(2) : "--"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-bold text-slate-500">Turbidity</span>
+                <span className="text-sm font-extrabold text-slate-800">
+                  {latestReading ? `${latestReading.turbidity.toFixed(1)} NTU` : "--"}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Critical Warning Alert Block */}
-          {latestReading !== null && latestReading.dissolvedOxygen < (settings?.doMin ?? 5.0) && (
-            <div className="glass-panel p-5 rounded-3xl bg-red-100 border border-red-200 flex items-start space-x-3">
-              <div className="bg-red-50 p-1.5 rounded-xl text-white shrink-0 mt-0.5">
-                <AlertTriangle className="h-4.5 w-4.5" />
+          {/* Turbidity Warning */}
+          {latestReading !== null && latestReading.turbidity > (settings?.turbidityMax ?? 100) && (
+            <div className="glass-panel p-5 rounded-3xl bg-red-50 border border-red-200 flex items-start space-x-3">
+              <div className="bg-red-100 p-1.5 rounded-xl shrink-0 mt-0.5">
+                <AlertTriangle className="h-4 w-4 text-red-600" />
               </div>
               <div>
-                <h4 className="text-xs font-black text-red-800 uppercase tracking-tight">Critical Drop Warning</h4>
-                <p className="text-[10px] text-red-700/90 font-bold uppercase tracking-wider leading-relaxed mt-1">
-                  Oxygen reached {latestReading.dissolvedOxygen.toFixed(1)} mg/L. Recommended action: Manual aeration bypass.
+                <h4 className="text-xs font-black text-red-800 uppercase tracking-tight">High Turbidity</h4>
+                <p className="text-[10px] text-red-700/90 font-bold leading-relaxed mt-1">
+                  Water clarity at {latestReading.turbidity.toFixed(1)} NTU — exceeds safe max. Check filtration system.
                 </p>
               </div>
             </div>
           )}
 
-          {/* Force Start Aerator Primary Button */}
+          {/* Temp Warning */}
+          {latestReading !== null &&
+            (latestReading.temperature < (settings?.tempMin ?? 26) || latestReading.temperature > (settings?.tempMax ?? 30)) && (
+            <div className="glass-panel p-5 rounded-3xl bg-orange-50 border border-orange-200 flex items-start space-x-3">
+              <div className="bg-orange-100 p-1.5 rounded-xl shrink-0 mt-0.5">
+                <AlertTriangle className="h-4 w-4 text-orange-600" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-orange-800 uppercase tracking-tight">Temperature Alert</h4>
+                <p className="text-[10px] text-orange-700/90 font-bold leading-relaxed mt-1">
+                  {latestReading.temperature.toFixed(1)}°C is outside safe range ({settings?.tempMin ?? 26}–{settings?.tempMax ?? 30}°C).
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Force Aerator Button */}
           <button
             onClick={forceStartAerator}
             disabled={forcingAerator}
             className="w-full flex items-center justify-center space-x-2 bg-[#0f3d4a] hover:bg-[#0c2e38] text-white font-bold py-3.5 px-6 rounded-3xl transition shadow-lg shadow-teal-900/10"
           >
-            <Zap className="h-4.5 w-4.5 fill-white animate-pulse" />
-            <span className="text-xs font-extrabold uppercase tracking-widest">Force Start Aerator</span>
+            <Zap className="h-4 w-4 fill-white animate-pulse" />
+            <span className="text-xs font-extrabold uppercase tracking-widest">
+              {forcingAerator ? "Activating..." : "Force Start Aerator"}
+            </span>
           </button>
         </div>
 

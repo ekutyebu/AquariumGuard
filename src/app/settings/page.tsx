@@ -19,7 +19,7 @@ interface Settings {
   tempMax: number;
   phMin: number;
   phMax: number;
-  doMin: number;
+  turbidityMax: number;
   aeratorState: boolean;
   boreholePumpState: boolean;
   predictiveEnabled: boolean;
@@ -36,7 +36,7 @@ export default function SettingsPage() {
     tempMax: 30.0,
     phMin: 6.5,
     phMax: 8.5,
-    doMin: 5.0,
+    turbidityMax: 100.0,
     aeratorState: true,
     boreholePumpState: false,
     predictiveEnabled: true,
@@ -74,14 +74,14 @@ export default function SettingsPage() {
     const { name, value, type, checked } = e.target;
     setSettings((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : type === "number" || name.includes("Min") || name.includes("Max") || name === "doMin" ? Number(value) : value,
+      [name]: type === "checkbox" ? checked : type === "number" || name.includes("Min") || name.includes("Max") || name === "turbidityMax" ? Number(value) : value,
     }));
   };
 
-  const handleDoSlider = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTurbiditySlider = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSettings((prev) => ({
       ...prev,
-      doMin: Math.max(5.0, Number(e.target.value)),
+      turbidityMax: Math.max(20.0, Number(e.target.value)),
     }));
   };
 
@@ -121,29 +121,33 @@ export default function SettingsPage() {
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define WIFI_SSID "${settings.wifiSsid}"
-#define WIFI_PASS "${settings.wifiPass}"
+// Multi Wi-Fi networks (add more entries as needed)
+struct WifiNetwork { const char* ssid; const char* pass; };
+const WifiNetwork WIFI_NETWORKS[] = {
+  { "${settings.wifiSsid}", "${settings.wifiPass}" },
+};
+const int WIFI_NETWORK_COUNT = sizeof(WIFI_NETWORKS) / sizeof(WIFI_NETWORKS[0]);
 
-#define SERVER_IP "${settings.serverIp}"
+#define SERVER_IP   "${settings.serverIp}"
 #define SERVER_PORT ${settings.serverPort}
 
-#define SIMULATE_SENSORS 0 // Set to 0 to read physical pins
+#define SIMULATE_SENSORS      0
 #define DEFAULT_INTERVAL_MINS ${settings.intervalMinutes}
 
-#define PIN_GREEN_LED 18
+#define PIN_GREEN_LED  18
 #define PIN_YELLOW_LED 19
-#define PIN_RED_LED 21
-#define PIN_BUZZER 22
+#define PIN_RED_LED    21
+#define PIN_BUZZER     22
 
-#define PIN_TEMP_BUS 4
-#define PIN_PH_ANALOG 34
-#define PIN_DO_ANALOG 35
+#define PIN_TEMP_BUS         4
+#define PIN_PH_ANALOG        34
+#define PIN_TURBIDITY_ANALOG 35
 
-#define TEMP_MIN ${settings.tempMin.toFixed(1)}
-#define TEMP_MAX ${settings.tempMax.toFixed(1)}
-#define PH_MIN ${settings.phMin.toFixed(2)}
-#define PH_MAX ${settings.phMax.toFixed(2)}
-#define DO_MIN ${settings.doMin.toFixed(1)}
+#define TEMP_MIN      ${settings.tempMin.toFixed(1)}
+#define TEMP_MAX      ${settings.tempMax.toFixed(1)}
+#define PH_MIN        ${settings.phMin.toFixed(2)}
+#define PH_MAX        ${settings.phMax.toFixed(2)}
+#define TURBIDITY_MAX ${settings.turbidityMax.toFixed(1)}
 
 #endif // CONFIG_H`;
   };
@@ -199,11 +203,11 @@ export default function SettingsPage() {
         {/* Left Column - Core Thresholds Form */}
         <form onSubmit={handleSave} className="space-y-5">
           
-          {/* DO Config */}
+          {/* Turbidity Config */}
           <div className="glass-panel p-5 rounded-3xl bg-white border border-slate-200 space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                Dissolved Oxygen
+                Turbidity
               </span>
               <span className="bg-slate-100 text-slate-500 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center space-x-1 border border-slate-200">
                 <Lock className="h-2.5 w-2.5" />
@@ -213,30 +217,30 @@ export default function SettingsPage() {
 
             <div className="flex items-baseline space-x-1">
               <span className="text-3xl font-extrabold text-slate-800 tracking-tighter">
-                {settings.doMin.toFixed(1)}
+                {settings.turbidityMax.toFixed(0)}
               </span>
-              <span className="text-xs font-bold text-slate-400">mg/L</span>
+              <span className="text-xs font-bold text-slate-400">NTU max</span>
             </div>
 
             <div className="space-y-1.5 pt-2">
               <input
                 type="range"
-                min="5.0"
-                max="10.0"
-                step="0.1"
-                value={settings.doMin}
-                onChange={handleDoSlider}
+                min="20"
+                max="200"
+                step="5"
+                value={settings.turbidityMax}
+                onChange={handleTurbiditySlider}
                 className="w-full accent-[#0f3d4a] cursor-pointer"
               />
               <div className="flex justify-between text-[8px] font-black text-slate-400 uppercase tracking-wider">
-                <span>0.0 Critical</span>
-                <span className="text-[#0f3d4a]">5.0 Safe Minimum</span>
-                <span>10.0 Peak</span>
+                <span>20 NTU Clean</span>
+                <span className="text-[#0f3d4a]">100 NTU Threshold</span>
+                <span>200 NTU Critical</span>
               </div>
             </div>
 
             <p className="text-[9px] text-slate-400 italic font-bold leading-relaxed border-t border-slate-100 pt-3">
-              Note: African Catfish require a minimum DO of 5.0 mg/L for optimal metabolism. System prevents lower settings.
+              Note: High turbidity reduces light penetration and oxygen transfer. African Catfish tolerate up to ~100 NTU before stress responses begin.
             </p>
           </div>
 
@@ -284,7 +288,7 @@ export default function SettingsPage() {
               <div>
                 <h4 className="text-xs font-bold text-slate-800 uppercase tracking-tight">Predictive Alert</h4>
                 <p className="text-[9px] text-slate-400 font-semibold leading-relaxed mt-1">
-                  Notify me if Dissolved Oxygen is estimated to drop below 5.0 mg/L in 30 minutes based on bioload telemetry.
+                  Notify me if Turbidity is estimated to exceed the safe maximum in 30 minutes based on sensor telemetry.
                 </p>
               </div>
             </div>

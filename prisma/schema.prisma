@@ -8,39 +8,39 @@ generator client {
 }
 
 model Telemetry {
-  id              String   @id @default(uuid())
-  timestamp       DateTime @default(now())
-  temperature     Float
-  ph              Float
-  dissolvedOxygen Float    // in mg/L (replacing turbidity)
-  isSimulated     Boolean  @default(false)
+  id          String   @id @default(uuid())
+  timestamp   DateTime @default(now())
+  temperature Float
+  ph          Float
+  turbidity   Float    // in NTU (Nephelometric Turbidity Units)
+  isSimulated Boolean  @default(false)
 }
 
 model Alert {
-  id          String   @id @default(uuid())
-  timestamp   DateTime @default(now())
-  type        String   // "THRESHOLD", "PREDICTIVE", or "ANOMALY"
-  severity    String   // "WARNING" or "CRITICAL"
-  parameter   String   // "TEMPERATURE", "PH", "DISSOLVED_OXYGEN"
-  value       Float
-  message     String
-  status      String   @default("ACTIVE") // "ACTIVE", "ACKNOWLEDGED", "RESOLVED"
-  resolvedAt  DateTime?
+  id         String    @id @default(uuid())
+  timestamp  DateTime  @default(now())
+  type       String    // "THRESHOLD", "PREDICTIVE", or "ANOMALY"
+  severity   String    // "WARNING" or "CRITICAL"
+  parameter  String    // "TEMPERATURE", "PH", "TURBIDITY"
+  value      Float
+  message    String
+  status     String    @default("ACTIVE") // "ACTIVE", "ACKNOWLEDGED", "RESOLVED"
+  resolvedAt DateTime?
 }
 
 model SystemSettings {
-  id                Int      @id @default(1)
-  tempMin           Float    @default(26.0)
-  tempMax           Float    @default(30.0)
-  phMin             Float    @default(6.5)
-  phMax             Float    @default(8.5)
-  doMin             Float    @default(5.0)  // safe minimum dissolved oxygen in mg/L
-  aeratorState      Boolean  @default(true) // active aerator toggle state
-  boreholePumpState Boolean  @default(false) // active borehole pump toggle state
-  predictiveEnabled Boolean  @default(true)  // alert toggle state
-  intervalMinutes   Int      @default(3)
-  wifiSsid          String   @default("AquariumGuard_Net")
-  wifiPass          String   @default("aquarium123")
-  serverIp          String   @default("192.168.1.100")
-  serverPort        Int      @default(3000)
+  id                Int     @id @default(1)
+  tempMin           Float   @default(26.0)
+  tempMax           Float   @default(30.0)
+  phMin             Float   @default(6.5)
+  phMax             Float   @default(8.5)
+  turbidityMax      Float   @default(100.0) // max safe turbidity in NTU
+  aeratorState      Boolean @default(true)
+  boreholePumpState Boolean @default(false)
+  predictiveEnabled Boolean @default(true)
+  intervalMinutes   Int     @default(3)
+  wifiSsid          String  @default("AquariumGuard_Net")
+  wifiPass          String  @default("aquarium123")
+  serverIp          String  @default("192.168.1.100")
+  serverPort        Int     @default(3000)
 }

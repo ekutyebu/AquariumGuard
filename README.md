@@ -51,6 +51,28 @@ flowchart LR
 
 ---
 
+## Hardware Interfaces and Connections
+
+The ESP32 microcontroller is interfaced with the following components. Ensure to connect them to the correct GPIO pins as configured in `firmware/src/config.h`:
+
+### Sensors (Analog Inputs)
+- **Temperature Sensor:** Connected to **Pin 32**
+- **pH Sensor:** Connected to **Pin 34**
+- **Turbidity Sensor:** Connected to **Pin 35**
+
+### Indicators & Actuators (Digital Outputs)
+- **Green LED (System Normal):** Connected to **Pin 18**
+- **Yellow LED (Warning):** Connected to **Pin 19**
+- **Red LED (Critical Alert):** Connected to **Pin 21**
+- **Buzzer:** Connected to **Pin 22**
+
+### LCD Display (I2C)
+*(For a 20x4 or 16x2 LCD using a PCF8574 adapter at address 0x27)*
+- **SDA (Data Line):** Connected to **Pin 25**
+- **SCL (Clock Line):** Connected to **Pin 26**
+
+---
+
 ## Switching to Another Computer (Migration Guide)
 
 This codebase is configured to be fully portable. If you switch to another PC or network, follow these steps:
@@ -141,3 +163,9 @@ This codebase is configured to be fully portable. If you switch to another PC or
        .\.venv\Scripts\pio.exe device monitor
        ```
    - If you prefer quick scripts, you can also double-click the batch files (`build.bat`, `upload.bat`, `monitor.bat`, `clean.bat`) in the `firmware/` folder.
+
+
+`bash
+   ### temporary assign bash privillage to current user:
+   Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+`

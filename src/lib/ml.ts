@@ -2,7 +2,7 @@ export interface TelemetryPoint {
   timestamp: Date;
   temperature: number;
   ph: number;
-  dissolvedOxygen: number;
+  turbidity: number; // in NTU
 }
 
 export interface Thresholds {
@@ -10,25 +10,25 @@ export interface Thresholds {
   tempMax: number;
   phMin: number;
   phMax: number;
-  doMin: number;
+  turbidityMax: number;
 }
 
 export interface MLAnalysisResult {
   anomalies: {
-    parameter: "TEMPERATURE" | "PH" | "DISSOLVED_OXYGEN";
+    parameter: "TEMPERATURE" | "PH" | "TURBIDITY";
     value: number;
     zScore: number;
     message: string;
   }[];
   predictions: {
-    parameter: "TEMPERATURE" | "PH" | "DISSOLVED_OXYGEN";
+    parameter: "TEMPERATURE" | "PH" | "TURBIDITY";
     timeFrameMinutes: number;
     predictedValue: number;
     thresholdCrossed: string; // "MIN", "MAX", or "NONE"
     message: string;
   }[];
   rateOfChangeAlerts: {
-    parameter: "TEMPERATURE" | "PH" | "DISSOLVED_OXYGEN";
+    parameter: "TEMPERATURE" | "PH" | "TURBIDITY";
     ratePerHour: number;
     message: string;
   }[];
@@ -92,7 +92,7 @@ export function analyzeTelemetry(
       historyVals: history.map((h) => h.temperature),
       minThresh: thresholds.tempMin,
       maxThresh: thresholds.tempMax,
-      rocLimit: 2.0, // °C change limit per hour
+      rocLimit: 2.0, // °C per hour
     },
     {
       name: "PH" as const,
@@ -103,12 +103,12 @@ export function analyzeTelemetry(
       rocLimit: 0.8,
     },
     {
-      name: "DISSOLVED_OXYGEN" as const,
-      currentVal: current.dissolvedOxygen,
-      historyVals: history.map((h) => h.dissolvedOxygen),
-      minThresh: thresholds.doMin, // critical safe minimum limit
-      maxThresh: 12.0, // standard maximum active limit
-      rocLimit: 1.5, // mg/L drop rate limit per hour
+      name: "TURBIDITY" as const,
+      currentVal: current.turbidity,
+      historyVals: history.map((h) => h.turbidity),
+      minThresh: 0,
+      maxThresh: thresholds.turbidityMax,
+      rocLimit: 20.0, // NTU per hour
     },
   ];
 
@@ -124,7 +124,7 @@ export function analyzeTelemetry(
           parameter: param.name,
           value: param.currentVal,
           zScore: parseFloat(zScore.toFixed(2)),
-          message: `Statistical Anomaly: ${param.name === "DISSOLVED_OXYGEN" ? "Dissolved Oxygen" : param.name} is abnormally ${zScore > 0 ? "high" : "low"} at ${param.currentVal.toFixed(1)} (Z-score: ${zScore.toFixed(2)}).`,
+          message: `Statistical Anomaly: ${param.name} is abnormally ${zScore > 0 ? "high" : "low"} at ${param.currentVal.toFixed(1)} (Z-score: ${zScore.toFixed(2)}).`,
         });
       }
     }
@@ -138,8 +138,8 @@ export function analyzeTelemetry(
     const regressionPoints = trendWindow.map((pt) => {
       const elapsedMinutes = (pt.timestamp.getTime() - oldestTime) / 60000;
       let yVal = pt.temperature;
-      if (param.name === "PH") yVal = pt.ph;
-      if (param.name === "DISSOLVED_OXYGEN") yVal = pt.dissolvedOxygen;
+      if (param.name === "PH")        yVal = pt.ph;
+      if (param.name === "TURBIDITY") yVal = pt.turbidity;
       return { x: elapsedMinutes, y: yVal };
     });
 
@@ -148,9 +148,8 @@ export function analyzeTelemetry(
       const { slope, intercept } = fit;
       const currentElapsed = (current.timestamp.getTime() - oldestTime) / 60000;
 
-      // Project 15, 30, and 60 minutes
-      const projections = [15, 30, 60];
-      projections.forEach((timeFrame) => {
+      // Project 15, 30, and 60 minutes ahead
+      [15, 30, 60].forEach((timeFrame) => {
         const targetElapsed = currentElapsed + timeFrame;
         const predictedVal = slope * targetElapsed + intercept;
 
@@ -160,7 +159,7 @@ export function analyzeTelemetry(
         if (predictedVal > param.maxThresh) {
           crossed = "MAX";
           threshVal = param.maxThresh;
-        } else if (predictedVal < param.minThresh) {
+        } else if (predictedVal < param.minThresh && param.minThresh > 0) {
           crossed = "MIN";
           threshVal = param.minThresh;
         }
@@ -170,26 +169,27 @@ export function analyzeTelemetry(
             param.currentVal < param.minThresh || param.currentVal > param.maxThresh;
 
           if (!isAlreadyCrossing) {
-            const paramLabel = param.name === "DISSOLVED_OXYGEN" ? "Dissolved Oxygen" : param.name;
+            const label = param.name === "TURBIDITY" ? "Turbidity" : param.name;
+            const unit  = param.name === "TURBIDITY" ? "NTU" : param.name === "TEMPERATURE" ? "°C" : "";
             result.predictions.push({
               parameter: param.name,
               timeFrameMinutes: timeFrame,
               predictedValue: parseFloat(predictedVal.toFixed(2)),
               thresholdCrossed: crossed,
-              message: `Predictive Warning: ${paramLabel} is estimated to drop below safe minimum of ${threshVal.toFixed(1)} mg/L in ${timeFrame} minutes based on bioload telemetry.`,
+              message: `Predictive Warning: ${label} is estimated to ${crossed === "MAX" ? "exceed" : "drop below"} safe ${crossed === "MAX" ? "maximum" : "minimum"} of ${threshVal.toFixed(1)} ${unit} in ${timeFrame} minutes.`,
             });
           }
         }
       });
 
-      // 3. Rate of Change
+      // 3. Rate of Change Alert
       const ratePerHour = slope * 60;
       if (Math.abs(ratePerHour) > param.rocLimit) {
-        const paramLabel = param.name === "DISSOLVED_OXYGEN" ? "Dissolved Oxygen" : param.name;
+        const label = param.name === "TURBIDITY" ? "Turbidity" : param.name;
         result.rateOfChangeAlerts.push({
           parameter: param.name,
           ratePerHour: parseFloat(ratePerHour.toFixed(2)),
-          message: `Rapid Drop Warning: ${paramLabel} is dropping rapidly at a rate of ${ratePerHour.toFixed(1)} units/hour.`,
+          message: `Rapid Change Warning: ${label} is changing rapidly at ${ratePerHour.toFixed(1)} units/hour.`,
         });
       }
     }
